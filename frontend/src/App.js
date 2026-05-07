@@ -410,26 +410,65 @@ export default function CoralHealthMonitor() {
           <div style={S.probLabel}>GEOSPATIAL LOGS & VALIDATION</div>
           <div style={{ background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(0,180,220,0.1)', overflow: 'hidden' }}>
             {history.map((item) => (
-              <div key={item.id} style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div key={item.id} style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
                 <div>
                   <div style={{ fontSize: '12px', color: CLASS_CONFIG[item.prediction_label]?.color || '#fff', fontWeight: 'bold' }}>
                     {item.prediction_label.replace('_', ' ').toUpperCase()}
                   </div>
-                  <div style={{ fontSize: '10px', color: '#5a7a9a', marginTop: '4px' }}>
-                    {item.latitude ? `COORDS: ${item.latitude.toFixed(4)}, ${item.longitude.toFixed(4)}` : "GPS DATA UNAVAILABLE"}
+                  <div style={{ fontSize: '10px', color: '#4a6a8a', marginTop: '2px' }}>
+                    {item.filename}
+                  </div>
+
+                  <div style={{ fontSize: '10px', color: '#3a5a7a', marginTop: '4px' }}>
+                    {item.latitude
+                    ? `COORDS: ${item.latitude.toFixed(4)}, ${item.longitude.toFixed(4)}`
+                    : 'GPS DATA UNAVAILABLE'}
                   </div>
                 </div>
                 
                 {item.is_verified ? (
-                  <span style={{ fontSize: '9px', color: '#00e5a0', letterSpacing: '0.1em' }}>✓ VERIFIED</span>
-                ) : (
-                  <button 
-                    onClick={() => handleVerify(item.id, item.prediction_label)}
-                    style={{ fontSize: '9px', padding: '6px 12px', background: 'transparent', border: '1px solid #00b4dc', color: '#00b4dc', borderRadius: '4px', cursor: 'pointer' }}
-                  >
-                    MARK AS ACCURATE
-                  </button>
-                )}
+  <div style={{ textAlign: 'right' }}>
+    <span style={{ fontSize: '9px', color: '#00e5a0', letterSpacing: '0.1em' }}>✓ VERIFIED</span>
+    <div style={{ fontSize: '9px', color: '#3a5a7a', marginTop: '4px' }}>
+      {item.verified_label.replace('_', ' ').toUpperCase()}
+    </div>
+  </div>
+) : (
+  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+    <span style={{ fontSize: '9px', color: '#3a5a7a', letterSpacing: '0.1em' }}>WAS THIS CORRECT?</span>
+    <div style={{ display: 'flex', gap: '6px' }}>
+      {/* ✓ Confirm model was right — passes model's own label */}
+      <button
+        onClick={() => handleVerify(item.id, item.prediction_label)}
+        style={{
+          fontSize: '9px', padding: '5px 10px', cursor: 'pointer',
+          background: 'transparent', borderRadius: '4px',
+          border: '1px solid #00e5a0', color: '#00e5a0',
+        }}
+      >
+        ✓ CORRECT
+      </button>
+
+      {/* ✗ Human disagrees — passes the OPPOSITE label */}
+      <button
+        onClick={() => handleVerify(
+          item.id,
+          item.prediction_label === 'healthy_corals' ? 'bleached_corals' : 'healthy_corals'
+        )}
+        style={{
+          fontSize: '9px', padding: '5px 10px', cursor: 'pointer',
+          background: 'transparent', borderRadius: '4px',
+          border: '1px solid #f5c400', color: '#f5c400',
+        }}
+      >
+        ✗ WRONG →{' '}
+        {(item.prediction_label === 'healthy_corals'
+          ? 'BLEACHED'
+          : 'HEALTHY')}
+      </button>
+    </div>
+  </div>
+)}
               </div>
             ))}
           </div>

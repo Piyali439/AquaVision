@@ -212,6 +212,10 @@ def get_history(db: Session = Depends(get_db)):
 # Validation Loop: Update a record with the correct label
 @app.patch("/verify/{record_id}")
 async def verify_record(record_id: int, correct_label: str, db: Session = Depends(get_db)):
+    # Guard: only accept valid class names
+    if correct_label not in ["healthy_corals", "bleached_corals"]:
+        raise HTTPException(400, f"Invalid label '{correct_label}'. Must be one of: healthy_corals, bleached_corals")
+    
     record = db.query(PredictionRecord).filter(PredictionRecord.id == record_id).first()
     if not record:
         raise HTTPException(404, "Record not found")
@@ -219,4 +223,7 @@ async def verify_record(record_id: int, correct_label: str, db: Session = Depend
     record.is_verified = True
     record.verified_label = correct_label
     db.commit()
-    return {"status": "success", "message": f"Record {record_id} verified as {correct_label}"}
+
+    # Tell the frontend whether the model was right or wrong
+    was_correct = record.prediction_label == correct_label
+    return {"status": "success", "message": f"Record {record_id} verified as {correct_label}", "was_correct": was_correct}
