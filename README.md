@@ -129,7 +129,7 @@ KAGGLE_INPUT = path
 **Cell 2 — Full training pipeline:**
 ```python
 # ════════════════════════════════════════════════════════
-# FULL PIPELINE — GOOGLE COLAB (Keras 3 compatible)
+# FULL PIPELINE — JUPYTER NOTEBOOK (Keras 3 compatible)
 # ════════════════════════════════════════════════════════
 
 import os, shutil, random
@@ -676,7 +676,7 @@ DATABASE_URL=sqlite:///./coral_data.db
 Place your downloaded `.keras` (or `.h5`) model file in the `backend/` folder, then start the server:
 
 ```bash
-uvicorn main:app --reload --port 8000
+python -m uvicorn main:app --reload
 ```
 
 API docs available at: `http://localhost:8000/docs`
