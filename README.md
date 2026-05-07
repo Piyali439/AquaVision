@@ -3,6 +3,7 @@
 
 > Hybrid AI pipeline combining a fine-tuned MobileNetV2 vision model with Gemini-2.5-Flash-Lite ecological reasoning — built for real-world reef monitoring.
 
+![alt text](image-1.png)
 
 ## What It Does
 
