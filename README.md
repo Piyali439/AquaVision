@@ -89,8 +89,8 @@ The model was trained on the [Corals Classification dataset](https://www.kaggle.
 |---|---|
 | Base model | MobileNetV2 (ImageNet weights, top removed) |
 | Head | GlobalAveragePooling → BatchNorm → Dense(256) → Dropout(0.4) → Softmax(2) |
-| Stage A | Head-only training, base frozen — 10 epochs, lr=1e-3 |
-| Stage B | Fine-tune top 30 layers — 20 epochs, lr=1e-5 |
+| Stage A | Head-only training, base frozen — 3 epochs, lr=1e-3 |
+| Stage B | Fine-tune top 30 layers — 5 epochs, lr=1e-5 |
 | Augmentation | Flip, rotation, zoom, brightness shift (3× augment per image) |
 | Class weighting | `sklearn` balanced weights to handle class imbalance |
 | Callbacks | EarlyStopping, ModelCheckpoint, ReduceLROnPlateau |
