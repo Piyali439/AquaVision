@@ -14,7 +14,6 @@ AquaVision lets a researcher or diver upload a coral reef image and instantly re
 - A **binary classification** — Healthy or Bleached — from a fine-tuned MobileNetV2 model
 - **Per-class confidence probabilities** from the vision model
 - **AI-generated ecological recommendations** from Gemini-2.5-Flash-Lite (urgency level + 3 expert actions)
-- **GPS coordinates** captured from the browser at scan time
 - A **persistent log** of all scans with a human-in-the-loop verification workflow
 - A live **analytics dashboard** showing total scans, bleaching rate, and verified count
 
@@ -25,7 +24,7 @@ AquaVision lets a researcher or diver upload a coral reef image and instantly re
 ```
 ┌─────────────────────────────────────────────────────┐
 │                   React Frontend                    │
-│  Upload → Analyse → Results + Geospatial History   │
+│  Upload → Analyse → Results + Scan History   │
 └───────────────────────┬─────────────────────────────┘
                         │ HTTP (FormData + lat/lon)
                         ▼
@@ -41,7 +40,7 @@ AquaVision lets a researcher or diver upload a coral reef image and instantly re
            ▼                       ▼
 ┌──────────────────┐   ┌───────────────────────────┐
 │  TF/Keras Model  │   │  SQLite (coral_data.db)   │
-│  MobileNetV2     │   │  Predictions + GPS + Tags │
+│  MobileNetV2     │   │  Predictions + Labels │
 │  .keras file     │   └───────────────────────────┘
 └──────────────────┘
            │
@@ -59,12 +58,11 @@ AquaVision lets a researcher or diver upload a coral reef image and instantly re
 ```
 aquavision/
 │
-├── training/                        # Google Colab training pipeline
-│   └── coral_training_pipeline.py   # Full MobileNetV2 fine-tune script
 │
 ├── backend/
 │   ├── main.py                      # FastAPI app — all endpoints
-│   ├── coral_classification_final.keras  # Trained model (not in git)
+|    ├── requirements.txt                  # Python dependencies
+│   ├── coral_classification_final.keras  # Trained model 
 │   ├── coral_data.db                # SQLite database (auto-created)
 │   └── .env                         # API keys & config (not in git)
 │
@@ -83,7 +81,7 @@ aquavision/
 
 The model was trained on the [Corals Classification dataset](https://www.kaggle.com/datasets/aneeshdighe/corals-classification) from Kaggle.
 
-**Pipeline (Google Colab):**
+**Pipeline (Jupyter Notebook):**
 
 | Stage | Detail |
 |---|---|
@@ -110,7 +108,7 @@ The model was trained on the [Corals Classification dataset](https://www.kaggle.
 ### Prerequisites
 
 - Python 3.10+
-- Node.js 18+
+- React.js 18
 - A [Google AI Studio](https://aistudio.google.com/) API key for Gemini
 
 ---
@@ -699,17 +697,15 @@ App runs at: `http://localhost:3000`
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/predict` | Upload image (+ optional lat/lon) → classification + Gemini recommendations |
+| `POST` | `/predict` | Upload image  → classification + Gemini recommendations |
 | `GET` | `/analytics/stats` | Total scans, bleaching rate, health distribution |
 | `GET` | `/history` | Last 10 prediction records |
-| `PATCH` | `/verify/{id}` | Mark a record as verified with correct label |
+| `PATCH` | `/verify/{id}` | Human validation — confirm or correct model prediction |
 
 **Example `/predict` request:**
 ```bash
 curl -X POST http://localhost:8000/predict \
-  -F "file=@coral_image.jpg" \
-  -F "lat=18.4655" \
-  -F "lon=-66.1057"
+  -F "file=@coral_image.jpg" 
 ```
 
 **Example response:**
@@ -721,9 +717,24 @@ curl -X POST http://localhost:8000/predict \
   "probabilities": { "bleached_corals": 0.0002, "healthy_corals": 0.9998 },
   "status": "The coral reef exhibits robust coral cover and minimal signs of stress.",
   "urgency": "low",
-  "actions": ["Document GPS coordinates", "Schedule quarterly re-survey", "Inspect for cryptic stressors"],
+  "actions": ["Document scan details", "Schedule quarterly re-survey", "Inspect for cryptic stressors"],
   "inference_ms": 318.44,
   "num_classes": 2
+}
+```
+
+**Example /verify request:**
+```bash
+curl -X PATCH "http://localhost:8000/verify/3?correct_label=bleached_corals"
+
+```
+
+**Example /verify response:**
+```json
+{
+  "status": "success",
+  "message": "Record 3 verified as bleached_corals",
+  "model_was_correct": false
 }
 ```
 
@@ -733,9 +744,7 @@ curl -X POST http://localhost:8000/predict \
 
 **Hybrid AI** — Vision classification and LLM reasoning run in the same request. Gemini provides marine biology context that a CNN alone cannot.
 
-**Geospatial logging** — The browser captures GPS coordinates at scan time. Every prediction is stored with its real-world location for longitudinal reef tracking.
-
-**Human-in-the-loop validation** — Any scan can be marked as verified via the UI, enabling future supervised retraining with real-world corrections.
+**Human-in-the-loop validation** — Every scan in the history log can be confirmed or corrected by a human. If the model predicted "Healthy" but the human marks it as "Bleached", the correction is stored separately from the original prediction. Over time this builds a ground-truth dataset of model mistakes that can be used for retraining.
 
 **Graceful fallback** — If the Gemini API is unavailable, the backend returns pre-written professional fallback recommendations so the UI never breaks.
 
@@ -750,7 +759,6 @@ curl -X POST http://localhost:8000/predict \
 | `GEMINI_API_KEY` | Google AI Studio key | required |
 | `MODEL_PATH` | Path to `.keras` model file | `coral_classification_final.keras` |
 | `MODEL_VERSION` | Version tag stored in DB | `1.0-MobileNetV2` |
-| `LOCATION_TAG` | Default reef location label | `Unknown Reef` |
 | `DATABASE_URL` | SQLAlchemy DB URL | `sqlite:///./coral_data.db` |
 
 ---
@@ -770,7 +778,7 @@ curl -X POST http://localhost:8000/predict \
 ## Roadmap
 
 - [ ] Multi-class expansion (dead coral, soft coral, algae overgrowth)
-- [ ] Interactive map view for geospatial scan history
+- [ ] Confidence threshold warning for low-certainty predictions
 - [ ] Retraining trigger using verified labels from the validation loop
 - [ ] Docker Compose setup for one-command deployment
 - [ ] Export scan history as CSV / GeoJSON
