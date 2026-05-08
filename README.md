@@ -61,7 +61,7 @@ aquavision/
 │
 ├── backend/
 │   ├── main.py                      # FastAPI app — all endpoints
-|    ├── requirements.txt                  # Python dependencies
+|   ├── requirements.txt                  # Python dependencies
 │   ├── coral_classification_final.keras  # Trained model 
 │   ├── coral_data.db                # SQLite database (auto-created)
 │   └── .env                         # API keys & config (not in git)
