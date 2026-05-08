@@ -270,18 +270,9 @@ export default function CoralHealthMonitor() {
   const analyse = async () => {
     if (!file || loading) return;
     setLoading(true); setResult(null); setError(null);
-
-    // Get Geospatial Data
-    let lat = null, lon = null;
-    if ("geolocation" in navigator) {
-      const pos = await new Promise((res) => navigator.geolocation.getCurrentPosition(res, () => res(null)));
-      if (pos) { lat = pos.coords.latitude; lon = pos.coords.longitude; }
-    }
     
     const body = new FormData();
     body.append("file", file);
-    if(lat) body.append("lat", lat);
-    if(lon) body.append("lon", lon);
     try {
       const res = await fetch(API_URL, { method: "POST", body });
       if (!res.ok) 
@@ -400,7 +391,6 @@ export default function CoralHealthMonitor() {
             <div style={S.metaFooter}>
               <span style={S.metaItem}>INFERENCE <span style={S.metaVal}>{result.inference_ms} MS</span></span>
               <span style={S.metaItem}>LLM <span style={S.metaVal}>GEMINI-2.5-FLASH-LITE</span></span>
-              <span style={S.metaItem}>LOC <span style={S.metaVal}>SEC-A REEF</span></span>
             </div>
           </div>
         )}
@@ -417,12 +407,6 @@ export default function CoralHealthMonitor() {
                   </div>
                   <div style={{ fontSize: '10px', color: '#4a6a8a', marginTop: '2px' }}>
                     {item.filename}
-                  </div>
-
-                  <div style={{ fontSize: '10px', color: '#3a5a7a', marginTop: '4px' }}>
-                    {item.latitude
-                    ? `COORDS: ${item.latitude.toFixed(4)}, ${item.longitude.toFixed(4)}`
-                    : 'GPS DATA UNAVAILABLE'}
                   </div>
                 </div>
                 

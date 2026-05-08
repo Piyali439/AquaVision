@@ -23,7 +23,6 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./coral_data.db")
 MODEL_PATH = os.getenv("MODEL_PATH", "coral_classification_final.keras")
 MODEL_VERSION = os.getenv("MODEL_VERSION", "1.0-MobileNetV2")
-LOCATION_TAG = os.getenv("LOCATION_TAG", "Unknown Reef")
 
 # ── Gemini Setup ─────────────────────────────────────────────────────────────
 # Initialize the Client with specific API versioning
@@ -52,11 +51,6 @@ class PredictionRecord(Base):
     confidence_score = Column(Float)
     inference_speed_ms = Column(Float)
     model_version = Column(String, default=MODEL_VERSION)
-    location_tag = Column(String, default=LOCATION_TAG)
-    
-    # --- New Fields for Location and Validation ---
-    latitude = Column(Float, nullable=True)
-    longitude = Column(Float, nullable=True)
     is_verified = Column(Boolean, default=False)
     verified_label = Column(String, nullable=True)
 
@@ -145,8 +139,6 @@ async def get_gemini_recommendations(status_label: str):
 @app.post("/predict", response_model=PredictionResponse)
 async def predict(
     file: UploadFile = File(...), 
-    lat: float = Form(None), # Optional Latitude
-    lon: float = Form(None), # Optional Longitude
     db: Session = Depends(get_db)
 ):
     
@@ -172,8 +164,6 @@ async def predict(
         prediction_label=label,
         confidence_score=round(float(raw_preds[idx]), 4),
         inference_speed_ms=round(ms, 2),
-        latitude=lat,
-        longitude=lon
     )
     db.add(new_record)
     db.commit()
