@@ -9,6 +9,8 @@ import tensorflow as tf
 from google import genai  # Use the new SDK
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import APIKeyHeader
+from fastapi import Security
 from PIL import Image
 from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, func
@@ -23,6 +25,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./coral_data.db")
 MODEL_PATH = os.getenv("MODEL_PATH", "coral_classification_final.keras")
 MODEL_VERSION = os.getenv("MODEL_VERSION", "1.0-MobileNetV2")
+ADMIN_SECRET = os.getenv("ADMIN_SECRET", "changeme")
 
 # ── Gemini Setup ─────────────────────────────────────────────────────────────
 # Initialize the Client with specific API versioning
@@ -42,6 +45,7 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} i
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+
 class PredictionRecord(Base):
     __tablename__ = "coral_health_logs"
     id = Column(Integer, primary_key=True, index=True)
@@ -60,6 +64,16 @@ def get_db():
     db = SessionLocal()
     try: yield db
     finally: db.close()
+
+# Reads the X-Admin-Key header from every request
+api_key_header = APIKeyHeader(name="X-Admin-Key", auto_error=False)
+
+def verify_admin(key: str = Security(api_key_header)):
+    if key != ADMIN_SECRET:
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized. Invalid or missing admin key."
+        )
 
 # ── Config & Model ──────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO)
@@ -84,6 +98,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Coral AI Consultant", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
+CONFIDENCE_THRESHOLD = 0.70
 class PredictionResponse(BaseModel):
     label: str
     confidence: float
@@ -94,6 +109,7 @@ class PredictionResponse(BaseModel):
     actions: list[str]
     inference_ms: float
     num_classes: int
+    low_confidence: bool 
 
 # ── Updated Gemini Logic ──────────────────────────────────────────
 async def get_gemini_recommendations(status_label: str):
@@ -126,14 +142,14 @@ async def get_gemini_recommendations(status_label: str):
         return status, urgency, actions[:3]
     except Exception as e:
         logging.error(f"Gemini SDK Error: {e}")
-        # Recruiter-ready professional fallback logic
+        
         if "bleached" in status_label:
             return ("Thermal stress detected. Coral tissues showing significant pigment loss.", 
                     "high", 
                     ["Report to monitoring authority", "Identify cooling zones", "Minimize contact"])
         return ("Coral appears healthy. Maintaining standard baseline conditions.", 
                 "low", 
-                ["Document GPS coordinates", "Schedule quarterly re-survey", "Inspect for cryptic stressors"])
+                ["Document scan details", "Schedule quarterly re-survey", "Inspect for cryptic stressors"])
 
 # ── Endpoints ──────────────────────────────────────────────────────────────
 @app.post("/predict", response_model=PredictionResponse)
@@ -158,7 +174,7 @@ async def predict(
 
     status_msg, urgency, actions = await get_gemini_recommendations(label)
 
-    # Save to Database with new location fields
+    # Save to Database 
     new_record = PredictionRecord(
         filename=file.filename,
         prediction_label=label,
@@ -177,7 +193,8 @@ async def predict(
         urgency=urgency,
         actions=actions,
         inference_ms=round(ms, 2),
-        num_classes=len(CLASSES)
+        num_classes=len(CLASSES),
+        low_confidence=float(raw_preds[idx]) < CONFIDENCE_THRESHOLD
     )
 
 @app.get("/analytics/stats")
@@ -199,21 +216,28 @@ def get_stats(db: Session = Depends(get_db)):
 def get_history(db: Session = Depends(get_db)):
     return db.query(PredictionRecord).order_by(PredictionRecord.timestamp.desc()).limit(10).all()
 
-# Validation Loop: Update a record with the correct label
+# Validation Loop
 @app.patch("/verify/{record_id}")
-async def verify_record(record_id: int, correct_label: str, db: Session = Depends(get_db)):
-    # Guard: only accept valid class names
+async def verify_record(
+    record_id: int,
+    correct_label: str,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_admin)  # ← add this line
+):
     if correct_label not in ["healthy_corals", "bleached_corals"]:
-        raise HTTPException(400, f"Invalid label '{correct_label}'. Must be one of: healthy_corals, bleached_corals")
+        raise HTTPException(400, f"Invalid label '{correct_label}'.")
     
     record = db.query(PredictionRecord).filter(PredictionRecord.id == record_id).first()
     if not record:
         raise HTTPException(404, "Record not found")
-    
+
     record.is_verified = True
     record.verified_label = correct_label
     db.commit()
 
-    # Tell the frontend whether the model was right or wrong
     was_correct = record.prediction_label == correct_label
-    return {"status": "success", "message": f"Record {record_id} verified as {correct_label}", "was_correct": was_correct}
+    return {
+        "status": "success",
+        "message": f"Record {record_id} verified as {correct_label}",
+        "model_was_correct": was_correct
+    }

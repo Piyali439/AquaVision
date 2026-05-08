@@ -18,11 +18,6 @@ const CLASS_CONFIG = {
     border: "rgba(245,196,0,0.3)", glow: "0 0 24px rgba(245,196,0,0.25)",
     label: "BLEACHED", icon: "◎",
   },
-  dead: {
-    color: "#ff4d6d", bg: "rgba(255,77,109,0.08)",
-    border: "rgba(255,77,109,0.3)", glow: "0 0 24px rgba(255,77,109,0.25)",
-    label: "DEAD", icon: "○",
-  },
 };
 
 const DEFAULT_CFG = {
@@ -217,15 +212,16 @@ function Spinner() {
 
 export default function CoralHealthMonitor() {
   injectStyles();
-  const [file, setFile]       = useState(null);
-  const [preview, setPreview] = useState(null);
-  const [isDragging, setDrag] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [result, setResult]   = useState(null);
-  const [stats, setStats]     = useState(null); // --- NEW STATS STATE ---
-  const [history, setHistory] = useState([]);
-  const [error, setError]     = useState(null);
-  const inputRef              = useRef(null);
+  const [file, setFile]         = useState(null);
+  const [preview, setPreview]   = useState(null);
+  const [isDragging, setDrag]   = useState(false);
+  const [loading, setLoading]   = useState(false);
+  const [result, setResult]     = useState(null);
+  const [stats, setStats]       = useState(null);
+  const [history, setHistory]   = useState([]);
+  const [error, setError]       = useState(null);
+  const [adminKey, setAdminKey] = useState("");
+  const inputRef                = useRef(null);
 
   // --- FETCH ANALYTICS & HISTORY ---
   const refreshData = useCallback(async () => {
@@ -245,7 +241,6 @@ export default function CoralHealthMonitor() {
     refreshData();
   }, [result, refreshData]);
 
-
   const acceptFile = useCallback((f) => {
     if (!f || !f.type.startsWith("image/")) { setError("Please upload an image."); return; }
     setFile(f); setPreview(URL.createObjectURL(f)); setResult(null); setError(null);
@@ -253,14 +248,28 @@ export default function CoralHealthMonitor() {
 
   const onInputChange  = e  => acceptFile(e.target.files[0]);
   const onDrop         = e  => { e.preventDefault(); setDrag(false); acceptFile(e.dataTransfer.files[0]); };
-   const onDragOver     = e  => { e.preventDefault(); setDrag(true); };
-   const onDragLeave    = () => setDrag(false);
-   const openFilePicker = () => inputRef.current?.click();
+  const onDragOver     = e  => { e.preventDefault(); setDrag(true); };
+  const onDragLeave    = () => setDrag(false);
+  const openFilePicker = () => inputRef.current?.click();
 
-  // --- VALIDATION LOOP HANDLER ---
+  // --- UPDATED VALIDATION HANDLER WITH ADMIN KEY ---
   const handleVerify = async (id, label) => {
+    if (!adminKey) {
+      alert("Please enter the admin key to verify records.");
+      return;
+    }
     try {
-      const res = await fetch(`http://localhost:8000/verify/${id}?correct_label=${label}`, { method: 'PATCH' });
+      const res = await fetch(
+        `http://localhost:8000/verify/${id}?correct_label=${label}`,
+        {
+          method: 'PATCH',
+          headers: { 'X-Admin-Key': adminKey }
+        }
+      );
+      if (res.status === 401) {
+        alert("Invalid admin key.");
+        return;
+      }
       if (res.ok) refreshData();
     } catch (err) {
       console.error("Verification failed", err);
@@ -270,15 +279,13 @@ export default function CoralHealthMonitor() {
   const analyse = async () => {
     if (!file || loading) return;
     setLoading(true); setResult(null); setError(null);
-    
+
     const body = new FormData();
     body.append("file", file);
     try {
       const res = await fetch(API_URL, { method: "POST", body });
-      if (!res.ok) 
-        throw new Error("Inference failed");
+      if (!res.ok) throw new Error("Inference failed");
       setResult(await res.json());
-    
     } catch (err) {
       setError(err.message);
     } finally {
@@ -294,9 +301,10 @@ export default function CoralHealthMonitor() {
       <div style={S.scanlines} />
       <div style={S.inner}>
         <Header S={S} />
+
         {/* --- ANALYTICS DASHBOARD --- */}
         {stats && (
-           <div style={S.statsContainer}>
+          <div style={S.statsContainer}>
             <div style={S.statCard}>
               <span style={S.statLabel}>System Scans</span>
               <span style={S.statVal}>{stats.total_scans}</span>
@@ -306,16 +314,18 @@ export default function CoralHealthMonitor() {
               <span style={S.statVal}>{stats.bleaching_rate}</span>
             </div>
             <div style={S.statCard}>
-              <span style={S.statLabel}>Accuracy verified</span>
+              <span style={S.statLabel}>Accuracy Verified</span>
               <span style={S.statVal}>{history.filter(h => h.is_verified).length}</span>
             </div>
           </div>
         )}
 
-        {/* Drop zone */}
-        <div style={S.dropzone(isDragging, !!preview)}
+        {/* --- DROP ZONE --- */}
+        <div
+          style={S.dropzone(isDragging, !!preview)}
           onClick={!preview ? openFilePicker : undefined}
-          onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}>
+          onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}
+        >
           {["tl","tr","bl","br"].map(p => <div key={p} style={S.corner(p)} />)}
           {preview ? (
             <div style={S.previewWrap}>
@@ -336,7 +346,7 @@ export default function CoralHealthMonitor() {
         <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp"
           style={{ display: "none" }} onChange={onInputChange} />
 
-        {/* Analyse button */}
+        {/* --- ANALYSE BUTTON --- */}
         <button style={S.analyseBtn(!file || loading)} onClick={analyse} disabled={!file || loading}>
           {loading ? <><Spinner /> RUNNING HYBRID AI</> : "◈  START ANALYSIS"}
         </button>
@@ -350,7 +360,7 @@ export default function CoralHealthMonitor() {
 
         {error && <div style={S.errorBox}><span>⚠</span>{error}</div>}
 
-        {/* Result card */}
+        {/* --- RESULT CARD --- */}
         {result && cfg && (
           <div style={S.resultCard(cfg)}>
             <div style={S.resultHeader(cfg)}>
@@ -360,6 +370,26 @@ export default function CoralHealthMonitor() {
               </div>
               <span style={S.confidencePill(cfg)}>{result.confidence_pct} CONFIDENCE</span>
             </div>
+
+            {/* --- LOW CONFIDENCE WARNING --- */}
+            {result.low_confidence && (
+              <div style={{
+                margin: '12px 24px 0',
+                padding: '10px 14px',
+                background: 'rgba(255,77,109,0.06)',
+                border: '1px solid rgba(255,77,109,0.25)',
+                borderRadius: '8px',
+                fontSize: '11px',
+                color: '#ff8099',
+                letterSpacing: '0.08em',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}>
+                <span>⚠</span>
+                LOW CONFIDENCE — Manual review recommended. Model is less than 70% certain.
+              </div>
+            )}
 
             <div style={S.probSection}>
               <div style={S.probLabel}>VISION MODEL PROBABILITIES</div>
@@ -395,12 +425,42 @@ export default function CoralHealthMonitor() {
           </div>
         )}
 
-        {/* --- GEOSPATIAL HISTORY & VALIDATION LOOP UI --- */}
+        {/* --- VALIDATION LOOP UI --- */}
         <div style={{ marginTop: '40px' }}>
-          <div style={S.probLabel}>GEOSPATIAL LOGS & VALIDATION</div>
+          <div style={S.probLabel}>VALIDATION</div>
+
+          {/* Admin key input */}
+          <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <input
+              type="password"
+              placeholder="ENTER ADMIN KEY"
+              value={adminKey}
+              onChange={e => setAdminKey(e.target.value)}
+              style={{
+                background: 'transparent',
+                border: '1px solid rgba(0,180,220,0.2)',
+                borderRadius: '6px',
+                padding: '8px 12px',
+                color: '#8aaabf',
+                fontSize: '11px',
+                letterSpacing: '0.1em',
+                fontFamily: 'inherit',
+                width: '220px',
+                outline: 'none',
+              }}
+            />
+            <span style={{ fontSize: '9px', color: '#3a5a7a', letterSpacing: '0.1em' }}>
+              REQUIRED TO SUBMIT CORRECTIONS
+            </span>
+          </div>
+
           <div style={{ background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(0,180,220,0.1)', overflow: 'hidden' }}>
             {history.map((item) => (
-              <div key={item.id} style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
+              <div key={item.id} style={{
+                padding: '16px 20px',
+                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px'
+              }}>
                 <div>
                   <div style={{ fontSize: '12px', color: CLASS_CONFIG[item.prediction_label]?.color || '#fff', fontWeight: 'bold' }}>
                     {item.prediction_label.replace('_', ' ').toUpperCase()}
@@ -409,50 +469,47 @@ export default function CoralHealthMonitor() {
                     {item.filename}
                   </div>
                 </div>
-                
-                {item.is_verified ? (
-  <div style={{ textAlign: 'right' }}>
-    <span style={{ fontSize: '9px', color: '#00e5a0', letterSpacing: '0.1em' }}>✓ VERIFIED</span>
-    <div style={{ fontSize: '9px', color: '#3a5a7a', marginTop: '4px' }}>
-      {item.verified_label.replace('_', ' ').toUpperCase()}
-    </div>
-  </div>
-) : (
-  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
-    <span style={{ fontSize: '9px', color: '#3a5a7a', letterSpacing: '0.1em' }}>WAS THIS CORRECT?</span>
-    <div style={{ display: 'flex', gap: '6px' }}>
-      {/* ✓ Confirm model was right — passes model's own label */}
-      <button
-        onClick={() => handleVerify(item.id, item.prediction_label)}
-        style={{
-          fontSize: '9px', padding: '5px 10px', cursor: 'pointer',
-          background: 'transparent', borderRadius: '4px',
-          border: '1px solid #00e5a0', color: '#00e5a0',
-        }}
-      >
-        ✓ CORRECT
-      </button>
 
-      {/* ✗ Human disagrees — passes the OPPOSITE label */}
-      <button
-        onClick={() => handleVerify(
-          item.id,
-          item.prediction_label === 'healthy_corals' ? 'bleached_corals' : 'healthy_corals'
-        )}
-        style={{
-          fontSize: '9px', padding: '5px 10px', cursor: 'pointer',
-          background: 'transparent', borderRadius: '4px',
-          border: '1px solid #f5c400', color: '#f5c400',
-        }}
-      >
-        ✗ WRONG →{' '}
-        {(item.prediction_label === 'healthy_corals'
-          ? 'BLEACHED'
-          : 'HEALTHY')}
-      </button>
-    </div>
-  </div>
-)}
+                {item.is_verified ? (
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontSize: '9px', color: '#00e5a0', letterSpacing: '0.1em' }}>✓ VERIFIED</span>
+                    <div style={{ fontSize: '9px', color: '#3a5a7a', marginTop: '4px' }}>
+                      {item.verified_label.replace('_', ' ').toUpperCase()}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                    <span style={{ fontSize: '9px', color: '#3a5a7a', letterSpacing: '0.1em' }}>WAS THIS CORRECT?</span>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      {/* ✓ Confirm model was right */}
+                      <button
+                        onClick={() => handleVerify(item.id, item.prediction_label)}
+                        style={{
+                          fontSize: '9px', padding: '5px 10px', cursor: 'pointer',
+                          background: 'transparent', borderRadius: '4px',
+                          border: '1px solid #00e5a0', color: '#00e5a0',
+                        }}
+                      >
+                        ✓ CORRECT
+                      </button>
+
+                      {/* ✗ Human disagrees — passes the opposite label */}
+                      <button
+                        onClick={() => handleVerify(
+                          item.id,
+                          item.prediction_label === 'healthy_corals' ? 'bleached_corals' : 'healthy_corals'
+                        )}
+                        style={{
+                          fontSize: '9px', padding: '5px 10px', cursor: 'pointer',
+                          background: 'transparent', borderRadius: '4px',
+                          border: '1px solid #f5c400', color: '#f5c400',
+                        }}
+                      >
+                        ✗ WRONG → {item.prediction_label === 'healthy_corals' ? 'BLEACHED' : 'HEALTHY'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
